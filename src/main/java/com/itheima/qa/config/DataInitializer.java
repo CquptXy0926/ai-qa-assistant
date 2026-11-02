@@ -39,13 +39,17 @@ public class DataInitializer implements CommandLineRunner {
     @Override
     public void run(String... args) {
         if (!userService.hasAnyUser()) {
-            // 【安全改造】默认密码不再硬编码/打印到前端可见处：
-            // 优先读环境变量；未设置则随机生成一个强密码，仅在服务端控制台一次性输出（不进前端、不进业务日志）。
-            String adminPwd = initialPassword("QA_ADMIN_PASSWORD", "admin");
-            String userPwd = initialPassword("QA_USER_PASSWORD", "user");
+            // 【初始密码策略】不再随机生成（随机密码只打印在启动控制台，运维容易漏看导致无法登录）：
+            // 优先读环境变量注入；未设置时回落到固定默认值，本地首次启动可直接用 admin / admin123 登录。
+            // 密码原文绝不写入任何日志、绝不返回前端；加密统一走 UserService.register -> hash（SHA-256 加盐），
+            // 与普通账号创建、自助改密使用的是同一套逻辑，此处不做任何改动。
+            // 生产环境务必通过环境变量覆盖默认密码，并在首次登录后立即修改。
+            String adminPwd = initialPassword("QA_ADMIN_PASSWORD", "admin123");
+            String userPwd = initialPassword("QA_USER_PASSWORD", "user123");
             userService.register("admin", adminPwd, "ADMIN");
             userService.register("user", userPwd, "USER");
-            log.info("已初始化默认账号 admin（管理员）、user（普通用户）；初始密码由环境变量提供或已随机生成，请首次登录后立即修改");
+            // 注意：这里只记录账号初始化事实，绝不打印密码本身
+            log.info("已初始化默认账号 admin（管理员）、user（普通用户）；密码由环境变量提供，未设置时使用默认初始密码，请首次登录后立即修改");
         }
         for (String name : new String[]{"公司制度", "产品手册", "FAQ"}) {
             if (kbRepository.findByName(name).isEmpty()) {
@@ -57,26 +61,12 @@ public class DataInitializer implements CommandLineRunner {
         }
     }
 
-    /** 取初始密码：有环境变量用之，否则随机生成并只在控制台一次性提示运维 */
-    private String initialPassword(String envKey, String account) {
+    /**
+     * 取初始密码：有环境变量则用之，否则回落到传入的默认密码。
+     * 无论走哪个分支，密码原文都不落日志、不进控制台输出。
+     */
+    private String initialPassword(String envKey, String defaultPwd) {
         String fromEnv = System.getenv(envKey);
-        if (fromEnv != null && !fromEnv.isBlank()) {
-            return fromEnv;
-        }
-        String gen = randomPassword();
-        // 仅打印到服务端启动控制台（非 Web 页面），供部署者首登后修改；生产建议改用环境变量注入
-        System.out.println(">>> 账号 " + account + " 初始密码（仅本次显示，请尽快修改）：" + gen);
-        return gen;
-    }
-
-    /** 用 SecureRandom 生成 14 位随机强密码（去掉了易混淆字符 0O1lI） */
-    private static String randomPassword() {
-        java.security.SecureRandom r = new java.security.SecureRandom();
-        final String chars = "ABCDEFGHJKMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%";
-        StringBuilder sb = new StringBuilder(14);
-        for (int i = 0; i < 14; i++) {
-            sb.append(chars.charAt(r.nextInt(chars.length())));
-        }
-        return sb.toString();
+        return (fromEnv != null && !fromEnv.isBlank()) ? fromEnv : defaultPwd;
     }
 }
