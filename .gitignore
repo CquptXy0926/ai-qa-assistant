@@ -1,0 +1,21 @@
+# —— 运行时数据（H2 数据库 + 上传文件），含用户密码哈希与会话，禁止入库 ——
+# qa.mv.db   : H2 MV Store 数据文件，删掉即重置系统
+# qa.trace.db: H2 的 SQL 异常追踪日志，可随时删除，不影响功能
+data/*.mv.db
+data/*.trace.db
+data/*.db
+data/files/
+
+# —— 构建产物 ——
+target/
+*.class
+*.jar
+
+# —— IDE 与系统文件 ——
+.idea/
+*.iml
+.DS_Store
+
+# —— 本地环境变量（若用于覆盖 LLM 密钥等敏感配置）——
+.env
+.env.local

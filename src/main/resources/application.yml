@@ -1,0 +1,63 @@
+spring:
+  application:
+    name: ai-qa-assistant
+  datasource:
+    url: jdbc:h2:file:./data/qa;AUTO_SERVER=TRUE
+    driver-class-name: org.h2.Driver
+    username: sa
+    password: ""
+  jpa:
+    hibernate:
+      ddl-auto: update
+    open-in-view: false
+  servlet:
+    multipart:
+      max-file-size: 50MB
+      max-request-size: 200MB
+  web:
+    resources:
+      cache:
+        period: 0   # 静态不缓存，配合页面里的 ?v= 版本号确保前端改动即时生效
+
+server:
+  port: 8080
+  # 反向代理（如 Nginx 终结 TLS）时，正确识别 X-Forwarded-Proto 判断真实是否为 HTTPS
+  forward-headers-strategy: framework
+  servlet:
+    session:
+      cookie:
+        http-only: true      # 禁止浏览器 JS 读取会话 Cookie，缓解 XSS 窃取
+        same-site: lax       # 跨站请求不携带该 Cookie，缓解 CSRF
+        # secure: true       # 启用 HTTPS 后取消注释：Cookie 只在加密通道传输，防止被嗅探
+  # —— 如需应用直接启用 HTTPS，取消注释并提供证书（或交给 Nginx 终结 TLS）——
+  # ssl:
+  #   enabled: true
+  #   key-store: classpath:keystore.p12
+  #   key-store-type: PKCS12
+  #   key-store-password: ${QA_SSL_P12_PASS}
+
+app:
+  # 上传文档原始文件存储目录
+  storage-dir: ./data/files
+  # RAG 检索参数
+  rag:
+    top-k: 20        # BM25 召回数量
+    final-k: 5       # 进入 prompt 的最终片段数
+    chunk-size: 512  # 切分长度（字符）
+    chunk-overlap: 64
+    min-score: 1.0   # BM25 分数阈值（辅助判据）：主判据为查询词覆盖率，详见 RetrievalService
+    # 精度调优：得分断层裁剪比例，片段得分需 ≥ top1 × 此值才保留。越小越宽松（召回越多）、越大越严格（越精准）
+    score-gap-ratio: 0.5
+    # 追加的疑问词/虚词（内置基表之外的补充），用于提取问题核心词做标题相关性判定
+    query-stop-words: []
+  # LLM 配置：优先从环境变量读取，密钥不再明文进代码库/Git；不设 api-key 则自动 Mock 模式
+  llm:
+    base-url: ${QA_LLM_BASE_URL:https://api.deepseek.com}
+    api-key: ${QA_LLM_API_KEY:}
+    model: ${QA_LLM_MODEL:deepseek-chat}
+    temperature: 0.2
+    max-tokens: 2048
+
+logging:
+  level:
+    com.itheima.qa: info
